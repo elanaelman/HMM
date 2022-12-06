@@ -101,16 +101,40 @@ class HMM:
             
         return b
     
+    # return the matrix of gammas for a given sequence of observations.
+    # gamma[t, i] is the probability of being in state i at time t, given the observations.
+    # formula taken from section 4.2 of Stamp's paper.
+    def gamma(self, sample, t, alpha = None, beta = None):
+        #first calculate alpha and beta, if needed.
+        if alpha == None:
+            alpha = self.alpha(sample)
+        if beta == None:
+            beta = self.beta(sample)
+            
+        #Calculate the total probability of the observations:
+        p_o = np.sum(alpha[len(sample)-1])
+        
+        #helper function defining gamma for each term
+        def g(t, i):
+            return alpha[t, i]*beta[t, i]/p_o
+        gs = np.vectorize(g)
+        
+        #construct matrix
+        return gs(t, self.states)
+    
     # return the most likely state at time t based on a sequence of observations
-    # formula from section 4.2 of Stamp's paper
-    def guess_state(self, sample, t):
-        a = self.alpha(sample)
-        b = self.beta(sample)
-        p_o = np.sum(a[len(sample)-1])
-        gamma = np.vectorize(lambda t, i: a[t, i]*b[t, i]/p_o)(t, self.states)
+    # formula from section 4.2 of Stamp's paper.
+    def guess_state(self, sample, t, gamma = None):
+        #construct gamma if necessary
+        if gamma == None:
+            gamma = self.gamma(sample, t)
         return np.argmax(gamma)
         
-            
+    # Return the probability of being in state i at time t and then 
+    # transitioning to state j at time t+1, given a sequence of observations.
+    def di_gamma(self, t, sample, i, j, alpha, beta):
+        p_o = np.sum(alpha[len(sample)-1])
+        return alpha[t, i]*self.transition(i, j)*self.emission(j, sample[t+1])*beta(t+1, j)/p_o
 
     # apply a single step of the em algorithm to the model on all the training data,
     # which is most likely a python list of numpy matrices (one per sample).
@@ -182,8 +206,8 @@ def main():
 
 if __name__ == '__main__':
     #filepath for elana:
-    #file = "C:/Users/eelman2/Downloads/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
-    file = "aclImdbNorm/train/pos/10551_7.txt"
+    file = "C:/Users/eelman2/Downloads/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
+    # file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=2)
     sample = format_sample(load_sample(file))
     print(hmm.guess_state(sample, 1))
