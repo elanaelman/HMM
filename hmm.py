@@ -1,7 +1,8 @@
 # File: hmm.py
 # Purpose:  Starter code for building and training an HMM in CSC 246.
 
-#references: "A Revealing Introduction to Hidden Markov Models" by Mark Stamp; PRML
+#Code by Elana Elman and Henry Lin
+#References: "A Revealing Introduction to Hidden Markov Models" by Mark Stamp; PRML
 
 import argparse  
 import os
@@ -30,57 +31,78 @@ class HMM:
         self.num_states = num_states
         self.vocab_size = vocab_size
         self.pi = np.ones(num_states)/num_states
-        #randomize start state?
+        #TODO: randomize start state?
         self.transitions = np.ones((num_states, num_states))/num_states
         self.emissions = np.ones((num_states, vocab_size))/vocab_size
         self.states = np.arange(num_states)
     
     
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
-    #TODO: move vectorized fn to class field
+    #TODO: move vectorized fn to class field?
     def LL(self, dataset):
+        #apply LL_helper to each sample in dataset. Return average.
         return np.avg(np.vectorize(self.p)(dataset))
 
     # return the LL for a single sequence (numpy array)
     def LL_helper(self, sample):
-        return self.p(sample)
+        return np.log(self.p(sample))
     
+    # return the probability of a given sequence of observations.
     def p(self, sample):
-        return np.sum(self.alpha(sample))
+        #probability of observation sequence is the sum of all alpha[i] after the last update.
+        return np.sum(self.alpha(sample)[len(sample)-1])
     
+    # return the matrix of alphas for a given sequence of observations.
+    # alpha[t, i] is the probability of the partial observation sequence up to time t,
+    # such that the model is in hidden state i at time t.
+    # formula taken from section 4.1 of Stamp's paper.
     def alpha(self, sample):
+        #initialize alpha
         a = np.zeros((len(sample), self.num_states))
+        # set each alpha at time 0 to 
+        # the prior pi(i) times the probability of observing sample[0] in state i.
         a[0] = np.vectorize(lambda i: self.pi[i]*self.emissions[i, sample[0]])(self.states)
         
-        
+        #helper function for the interior of the sum term
         def op(t, i, j):
             return a[t, j]*self.transitions[j, i]
         ops = np.vectorize(op)
+        #helper function for computing the sum term
         def sum_ops(t, i):
             return np.sum(ops(t, i, self.states))
         
         for t in range(1, len(sample)):
             for i in self.states:
+                #compute alpha at t, i.
                 a[t, i] = sum_ops(t-1, i)*self.emissions[i, sample[t]]
         
         return a
             
-    
+    # return the matrix of betas for a given sequence of observations.
+    # beta[t, i] is the probability of observations after time t,
+    # given that the model is in state i at time t.
+    # formula taken from section 4.2 of Stamp's paper.
     def beta(self, sample):
+        #initialize beta
         b = np.ones((len(sample), self.num_states))
         
+        #helper function for the interior of the sum term
         def op(t, i, j):
             return b[t, j]*self.transitions[i, j]*self.emissions[j, sample[t]]
         ops = np.vectorize(op)
+        #helper function for computing the sum term
         def sum_ops(t, i):
             return np.sum(ops(t, i, self.states))
         
         for t in range(len(sample)-2, -1, -1): #go backwards through indices
             for i in self.states:
+                #compute beta at t, i.
                 b[t, i] = sum_ops(t+1, i)
             
         return b
     
+    # return the most likely state at time t based on a sequence of observations
+    # formula from section 4.2 of Stamp's paper
     def guess_state(self, sample, t):
         a = self.alpha(sample)
         b = self.beta(sample)
@@ -117,13 +139,14 @@ def load_subdir(path):
             data.append(fh.read())
     return data
 
+#load a single review
 def load_sample(file):
     o = open(file)
     f = o.read()
     o.close()
     return f
         
-
+#convert text sample to a string of integers
 to_int = np.vectorize(ord)
 def format_sample(sample):
     return to_int(list(sample))
@@ -158,7 +181,9 @@ def main():
     #     if it converges early, stop the loop and print a message
 
 if __name__ == '__main__':
-    file = "C:/Users/eelman2/Downloads/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
+    #filepath for elana:
+    #file = "C:/Users/eelman2/Downloads/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
+    file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=2)
     sample = format_sample(load_sample(file))
     print(hmm.guess_state(sample, 1))
