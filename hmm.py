@@ -7,6 +7,7 @@
 import argparse  
 import os
 import numpy as np
+from math import inf
 
 # A utility class for bundling together relevant parameters - you may modify if you like.
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,19 +39,24 @@ class HMM:
     
     
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
-    #TODO: move vectorized fn to class field?
-    def LL(self, dataset):
+    def LL(self, dataset, alpha=None):
+        if alpha is None:
+            alpha = self.alpha(sample)
         #apply LL_helper to each sample in dataset. Return average.
-        return np.avg(np.vectorize(self.p)(dataset))
+        return np.average([self.LL_helper(sample, alpha) for sample in dataset])
 
     # return the LL for a single sequence (numpy array)
-    def LL_helper(self, sample):
-        return np.log(self.p(sample))
+    def LL_helper(self, sample, alpha=None):
+        if alpha is None:
+            alpha = self.alpha(sample)
+        return np.log(self.p(sample, alpha))
     
     # return the probability of a given sequence of observations.
-    def p(self, sample):
+    def p(self, sample, alpha=None):
+        if alpha is None:
+            alpha = self.alpha(sample)
         #probability of observation sequence is the sum of all alpha[i] after the last update.
-        return np.sum(self.alpha(sample)[len(sample)-1])
+        return np.sum(alpha[len(sample)-1])
     
     # return the matrix of alphas for a given sequence of observations.
     # alpha[t, i] is the probability of the partial observation sequence up to time t,
@@ -67,14 +73,14 @@ class HMM:
         def op(t, i, j):
             return a[t, j]*self.transitions[j, i]
         ops = np.vectorize(op)
-        #helper function for computing the sum term
-        def sum_ops(t, i):
-            return np.sum(ops(t, i, self.states))
+        #helper function for computing each element
+        def a_val(t, i):
+            return np.sum(ops(t-1, i, self.states))*self.emissions[i, sample[t]]
+        a_vals = np.vectorize(a_val, excluded='t')
         
         for t in range(1, len(sample)):
-            for i in self.states:
-                #compute alpha at t, i.
-                a[t, i] = sum_ops(t-1, i)*self.emissions[i, sample[t]]
+            #compute alpha at t, i
+            a[t] = a_vals(t, self.states)
         
         return a
             
@@ -94,6 +100,7 @@ class HMM:
         def sum_ops(t, i):
             return np.sum(ops(t, i, self.states))
         
+        #todo: vectorize
         for t in range(len(sample)-2, -1, -1): #go backwards through indices
             for i in self.states:
                 #compute beta at t, i.
@@ -106,9 +113,9 @@ class HMM:
     # formula taken from section 4.2 of Stamp's paper.
     def gamma(self, sample, alpha = None, beta = None):
         #first calculate alpha and beta, if needed.
-        if alpha == None:
+        if alpha is None:
             alpha = self.alpha(sample)
-        if beta == None:
+        if beta is None:
             beta = self.beta(sample)
             
         #Calculate the total probability of the observations:
@@ -120,7 +127,7 @@ class HMM:
         gs = np.vectorize(g)
         
         #construct matrix
-        return gs(range(len(sample)), self.states)
+        return gs(np.transpose([range(len(sample))]), [self.states])
     
     # return the most likely state at time t based on a sequence of observations
     # formula from section 4.2 of Stamp's paper.
@@ -139,22 +146,66 @@ class HMM:
         
         p_o = np.sum(alpha[len(sample)-1])
         def d_g(t, i, j):
-            return alpha[t, i]*self.transition(i, j)*self.emission(j, sample[t+1])*beta(t+1, j)/p_o
+            return alpha[t, i]*self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j]/p_o
         d_gs = np.vectorize(d_g)
         
-        return d_gs(range(len(sample)), self.states, self.states)
+        return d_gs(np.array([[range(len(sample)-1)]]).transpose(2, 0, 1), 
+                    np.transpose([[self.states]], (0, 2, 1)), 
+                    [[self.states]])
 
     # apply a single step of the em algorithm to the model on all the training data,
     # which is most likely a python list of numpy matrices (one per sample).
     # Note: you may find it helpful to write helper methods for the e-step and m-step,
     def em_step(self, dataset):
-        #todo: for each sample or something
+        #todo: for each sample, or something
         sample = dataset[0]
+        
+        T = len(sample)
         alpha = self.alpha(sample)
         beta = self.beta(sample)
-        di_gamma = self.di_gamma(alpha, beta)
-        gamma = self.gamma(alpha, beta)
-        pass
+        di_gamma = self.di_gamma(sample, alpha, beta)
+        gamma = self.gamma(sample, alpha, beta)
+        
+        ts = range(T-1)
+        
+        #update pi:
+        self.pi = gamma[0]
+            
+        #update A:
+        def t(i, j):
+            numerator = np.sum(di_gamma[ts, i, j])
+            denominator = np.sum(gamma[ts, j])
+            return numerator/denominator
+        t_vectorized = np.vectorize(t)
+        
+        def e(j, k):
+            indices = np.nonzero(sample == k) #get list of times where the observation is k
+            numerator = np.sum(gamma[indices, j])
+            denominator = np.sum(gamma[ts, j])
+            return numerator/denominator
+        e_vectorized = np.vectorize(e)
+        
+        #update model
+        self.transitions = t_vectorized(np.transpose([self.states]), [self.states])
+        self.emissions = e_vectorized(np.transpose([self.states]), [range(self.vocab_size)])
+        
+        #return updated probability
+        return self.p(sample, alpha)
+    
+    #todo: full dataset
+    def train(self, sample, maxIters):
+        dataset = [sample]
+        
+        oldLL = -inf
+        for i in range(maxIters):
+            self.em_step(dataset)
+            newLL = self.LL(dataset)
+            if newLL > oldLL:
+                oldLL = newLL
+            else:
+                break
+            
+        
 
     # Return a "completed" sample by additing additional steps based on model probability.
     def complete_sequence(self, sample, steps):
@@ -220,9 +271,9 @@ def main():
 
 if __name__ == '__main__':
     #filepath for elana:
-    file = "C:/Users/eelman2/Downloads/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
+    file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
     # file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=2)
     sample = format_sample(load_sample(file))
-    print(hmm.guess_state(sample, 1))
+    hmm.train(sample, 1)
     #main()
