@@ -31,7 +31,7 @@ class HMM:
         self.num_states = num_states
         self.vocab_size = vocab_size
         self.pi = np.ones(num_states)/num_states
-        #TODO: randomize start state?
+        #TODO: randomize start state
         self.transitions = np.ones((num_states, num_states))/num_states
         self.emissions = np.ones((num_states, vocab_size))/vocab_size
         self.states = np.arange(num_states)
@@ -104,7 +104,7 @@ class HMM:
     # return the matrix of gammas for a given sequence of observations.
     # gamma[t, i] is the probability of being in state i at time t, given the observations.
     # formula taken from section 4.2 of Stamp's paper.
-    def gamma(self, sample, t, alpha = None, beta = None):
+    def gamma(self, sample, alpha = None, beta = None):
         #first calculate alpha and beta, if needed.
         if alpha == None:
             alpha = self.alpha(sample)
@@ -120,7 +120,7 @@ class HMM:
         gs = np.vectorize(g)
         
         #construct matrix
-        return gs(t, self.states)
+        return gs(range(len(sample)), self.states)
     
     # return the most likely state at time t based on a sequence of observations
     # formula from section 4.2 of Stamp's paper.
@@ -130,16 +130,30 @@ class HMM:
             gamma = self.gamma(sample, t)
         return np.argmax(gamma)
         
-    # Return the probability of being in state i at time t and then 
+    # Return the matrix of gammas for a given sequence of observations.
+    # gamma[t, i, j] is the probability of being in state i at time t and then 
     # transitioning to state j at time t+1, given a sequence of observations.
-    def di_gamma(self, t, sample, i, j, alpha, beta):
+    # Formula from section 4.3 of Stamp's paper.
+    def di_gamma(self, sample, alpha, beta):
+        d_g = np.zeros((len(sample), self.num_states, self.num_states))
+        
         p_o = np.sum(alpha[len(sample)-1])
-        return alpha[t, i]*self.transition(i, j)*self.emission(j, sample[t+1])*beta(t+1, j)/p_o
+        def d_g(t, i, j):
+            return alpha[t, i]*self.transition(i, j)*self.emission(j, sample[t+1])*beta(t+1, j)/p_o
+        d_gs = np.vectorize(d_g)
+        
+        return d_gs(range(len(sample)), self.states, self.states)
 
     # apply a single step of the em algorithm to the model on all the training data,
     # which is most likely a python list of numpy matrices (one per sample).
     # Note: you may find it helpful to write helper methods for the e-step and m-step,
     def em_step(self, dataset):
+        #todo: for each sample or something
+        sample = dataset[0]
+        alpha = self.alpha(sample)
+        beta = self.beta(sample)
+        di_gamma = self.di_gamma(alpha, beta)
+        gamma = self.gamma(alpha, beta)
         pass
 
     # Return a "completed" sample by additing additional steps based on model probability.
