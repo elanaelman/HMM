@@ -39,24 +39,16 @@ class HMM:
     
     
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
-    def LL(self, dataset, alpha=None):
-        if alpha is None:
-            alpha = self.alpha(sample)
+    def LL(self, dataset):
         #apply LL_helper to each sample in dataset. Return average.
-        return np.average([self.LL_helper(sample, alpha) for sample in dataset])
+        return np.average([self.LL_helper(sample) for sample in dataset])
 
     # return the LL for a single sequence (numpy array)
-    def LL_helper(self, sample, alpha=None):
-        if alpha is None:
-            alpha = self.alpha(sample)
-        return np.log(self.p(sample, alpha))
-    
-    # return the probability of a given sequence of observations.
-    def p(self, sample, alpha=None):
-        if alpha is None:
-            alpha = self.alpha(sample)
-        #probability of observation sequence is the sum of all alpha[i] after the last update.
-        return np.sum(alpha[len(sample)-1])
+    def LL_helper(self, sample):
+        alpha = self.alpha(sample)
+        beta = self.beta(sample)
+        alpha, beta, c = self.scale(sample, alpha, beta)
+        return -np.sum(np.log(c))
     
     # return the matrix of alphas for a given sequence of observations.
     # alpha[t, i] is the probability of the partial observation sequence up to time t,
@@ -107,6 +99,22 @@ class HMM:
                 b[t, i] = sum_ops(t+1, i)
             
         return b
+    
+    def scale(self, sample, alpha, beta):
+        c = np.zeros((len(sample)))
+        a_tilde = np.zeros(alpha.shape)
+        a_tilde[0] = alpha[0]
+        
+        c[0] = 1/np.sum(alpha[0])
+        alpha[0] = c[0]*a_tilde[0]
+        for t in range(1, len(sample)):
+            for i in range(1, self.num_states):
+                product = lambda j: alpha[t-1, j]*self.transitions[j, i]*self.emissions[i, sample[t]]
+                a_tilde[t, i] = np.sum(np.vectorize(product)(range(self.num_states)))
+            c[t] = 1/np.sum(a_tilde[t])
+            alpha[t] = c[t]*a_tilde[t]
+            beta[t] = c[t]*beta[t]
+        return alpha, beta, c
     
     # return the matrix of gammas for a given sequence of observations.
     # gamma[t, i] is the probability of being in state i at time t, given the observations.
@@ -163,6 +171,7 @@ class HMM:
         T = len(sample)
         alpha = self.alpha(sample)
         beta = self.beta(sample)
+        alpha, beta, c = self.scale(sample, alpha, beta)
         di_gamma = self.di_gamma(sample, alpha, beta)
         gamma = self.gamma(sample, alpha, beta)
         
@@ -178,6 +187,7 @@ class HMM:
             return numerator/denominator
         t_vectorized = np.vectorize(t)
         
+        #update B:
         def e(j, k):
             indices = np.nonzero(sample == k) #get list of times where the observation is k
             numerator = np.sum(gamma[indices, j])
@@ -190,7 +200,7 @@ class HMM:
         self.emissions = e_vectorized(np.transpose([self.states]), [range(self.vocab_size)])
         
         #return updated probability
-        return self.p(sample, alpha)
+        return self.LL(dataset)
     
     #todo: full dataset
     def train(self, sample, maxIters):
@@ -200,12 +210,12 @@ class HMM:
         for i in range(maxIters):
             self.em_step(dataset)
             newLL = self.LL(dataset)
+            print(newLL)
             if newLL > oldLL:
                 oldLL = newLL
             else:
                 break
             
-        
 
     # Return a "completed" sample by additing additional steps based on model probability.
     def complete_sequence(self, sample, steps):
@@ -275,5 +285,5 @@ if __name__ == '__main__':
     # file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=2)
     sample = format_sample(load_sample(file))
-    hmm.train(sample, 1)
+    hmm.train(sample, 5)
     #main()
