@@ -32,7 +32,7 @@ class HMM:
     def __init__(self, num_states=10, vocab_size=255):
         self.num_states = num_states
         self.vocab_size = vocab_size
-        self.pi = np.ones(num_states) / num_states
+        self.pi = np.ones(num_states) / num_states 
         # TODO: randomize start state
         self.transitions = np.ones((num_states, num_states)) / num_states
         self.emissions = np.ones((num_states, vocab_size)) / vocab_size
@@ -110,8 +110,7 @@ class HMM:
         a_tilde = np.zeros(alpha.shape)
         a_tilde[0] = alpha[0]
 
-        p_o = np.sum(alpha[len(sample) - 1])
-
+        #TODO: cache sums; remove a_tilde 
         c[0] = np.sum(alpha[0])  # p(observation 0)
         alpha[0] = c[0] * a_tilde[0]
         for t in range(1, len(sample)):
@@ -230,6 +229,7 @@ class HMM:
                 oldLL = newLL
             else:
                 break
+        #print(self.emissions)
 
     # Return a "completed" sample by additing additional steps based on model probability.
     def complete_sequence(self, sample, steps):
@@ -312,7 +312,7 @@ if __name__ == '__main__':
     # filepath for elana:
     # file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
     # file = "aclImdbNorm/train/pos/10551_7.txt"
-    hmm = HMM(num_states=1)
+    hmm = HMM(num_states=10)
     sample = format_sample('ab')
-    hmm.train(sample, 5)
+    hmm.train(sample, 1000)
     # main()
