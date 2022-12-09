@@ -108,7 +108,7 @@ class HMM:
         c[0] = 1/np.sum(alpha[0])
         alpha[0] = c[0]*a_tilde[0]
         for t in range(1, len(sample)):
-            for i in range(1, self.num_states):
+            for i in range(0, self.num_states):
                 product = lambda j: alpha[t-1, j]*self.transitions[j, i]*self.emissions[i, sample[t]]
                 a_tilde[t, i] = np.sum(np.vectorize(product)(range(self.num_states)))
             c[t] = 1/np.sum(a_tilde[t])
@@ -150,6 +150,8 @@ class HMM:
     # transitioning to state j at time t+1, given a sequence of observations.
     # Formula from section 4.3 of Stamp's paper.
     def di_gamma(self, sample, alpha, beta):
+        if len(sample) == 1:
+            return None
         d_g = np.zeros((len(sample), self.num_states, self.num_states))
         
         p_o = np.sum(alpha[len(sample)-1])
@@ -174,24 +176,24 @@ class HMM:
         alpha, beta, c = self.scale(sample, alpha, beta)
         di_gamma = self.di_gamma(sample, alpha, beta)
         gamma = self.gamma(sample, alpha, beta)
-        
-        ts = range(T-1)
-        
         #update pi:
         self.pi = gamma[0]
             
         #update A:
         def t(i, j):
-            numerator = np.sum(di_gamma[ts, i, j])
-            denominator = np.sum(gamma[ts, j])
-            return numerator/denominator
+            if di_gamma is None:
+                return 0
+            else:
+                numerator = np.sum(di_gamma[range(T-1), i, j])
+                denominator = np.sum(gamma[range(T), j])
+                return numerator/denominator
         t_vectorized = np.vectorize(t)
         
         #update B:
         def e(j, k):
             indices = np.nonzero(sample == k) #get list of times where the observation is k
             numerator = np.sum(gamma[indices, j])
-            denominator = np.sum(gamma[ts, j])
+            denominator = np.sum(gamma[range(T), j])
             return numerator/denominator
         e_vectorized = np.vectorize(e)
         
@@ -281,9 +283,9 @@ def main():
 
 if __name__ == '__main__':
     #filepath for elana:
-    file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
+    #file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
     # file = "aclImdbNorm/train/pos/10551_7.txt"
-    hmm = HMM(num_states=2)
-    sample = format_sample(load_sample(file))
+    hmm = HMM(num_states=1)
+    sample = format_sample('ab')
     hmm.train(sample, 5)
     #main()
