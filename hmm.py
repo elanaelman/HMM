@@ -11,6 +11,8 @@ import numpy
 import numpy as np
 from math import inf
 
+import pickle
+
 
 # A utility class for bundling together relevant parameters - you may modify if you like.
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -210,6 +212,7 @@ class HMM:
 
         e1_vectorized = np.vectorize(e1)
         e2_vectorized = np.vectorize(e2)
+
         a_num = np.zeros(self.transitions.shape)
         a_denom = np.zeros(self.transitions.shape)
         b_num = np.zeros(self.emissions.shape)
@@ -258,12 +261,24 @@ class HMM:
 
     # Save the complete model to a file (most likely using np.save and pickles)
     def save_model(self, filename):
-        pass
+        model = (self.transitions, self.emissions, self.pi)
+        # np.save('model', model)
+        # np.savetxt("file.csv", model, delimiter=",")
+        with open(filename, 'wb') as f:
+            pickle.dump(model, f)
+        print("Saved to "+filename)
 
 
 # Load a complete model from a file and return an HMM object (most likely using np.load and pickles)
 def load_hmm(filename):
-    pass
+    with open(filename, 'rb') as f:
+        model = pickle.load(f)
+    ret = HMM(num_states=len(model[2]))
+    ret.transitions = model[0]
+    ret.emissions = model[1]
+    ret.pi = model[2]
+    print('Loaded from '+filename)
+    return hmm
 
 
 # Load all the files in a subdirectory and return a giant list.
@@ -335,5 +350,14 @@ if __name__ == '__main__':
     # file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=10)
     sample = format_sample('ab')
-    hmm.train(sample, 1000)
+    hmm.train(sample, 100)
+
+
+    hmm.save_model('model.pickle')
+    please = load_hmm('model.pickle')
+    print(hmm.transitions - please.transitions)
+    print(hmm.emissions - please.emissions)
+    print(hmm.pi - please.pi)
+
+
     # main()
