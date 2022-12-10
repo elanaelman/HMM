@@ -151,8 +151,10 @@ class HMM:
 
     # return the most likely state at time t based on a sequence of observations
     # formula from section 4.2 of Stamp's paper.
-    def guess_state(self, sample, t, gamma):
+    def guess_state(self, sample, t, gamma=None):
         # construct gamma if necessary
+        if gamma == None:
+            gamma = self.gamma(sample, t)
         return np.argmax(gamma)
 
     # Return the matrix of gammas for a given sequence of observations.
@@ -307,9 +309,10 @@ class HMM:
                     alpha[t] = c[t]*alpha[t]
                     
                 #beta pass:
+                beta[T-1] = c[T-1]
                 for t in range(T-2, -1, -1):
                     for i in self.states:
-                        beta[t] = np.sum([self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j] for j in self.states])
+                        beta[t] = np.sum([self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j]*c[t] for j in self.states])
                     
                 for t in range(T-1):
                     for i in range(self.num_states):
@@ -439,12 +442,12 @@ def main():
 
 if __name__ == '__main__':
     # filepath for elana:
-    #file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos"
-    file = "aclImdbNorm/train/pos"
+    file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos"
+    #file = "aclImdbNorm/train/pos"
     hmm = HMM(num_states=10)
     print('loading and parsing dataset:')
-    dataset = load_subdir(file)
-    dataset = dataset[:10]
+    #dataset = load_subdir(file)
+    dataset = ['abc', 'def']
     print('dataset loaded')
     #sample = load_subdir("aclImdbNorm/train/pos")
     for i in range(len(dataset)):
