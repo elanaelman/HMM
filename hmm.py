@@ -151,10 +151,8 @@ class HMM:
 
     # return the most likely state at time t based on a sequence of observations
     # formula from section 4.2 of Stamp's paper.
-    def guess_state(self, sample, t, gamma=None):
+    def guess_state(self, sample, t, gamma):
         # construct gamma if necessary
-        if gamma == None:
-            gamma = self.gamma(sample, t)
         return np.argmax(gamma)
 
     # Return the matrix of gammas for a given sequence of observations.
@@ -270,27 +268,6 @@ class HMM:
     #helper method to normalize a vector
     def normalize(self, vec):
          return vec/np.sum(vec)
-     
-        
-    def LL_take_2(self, dataset):
-        sum_LL = 0
-        for sample in dataset:
-            T = len(sample)
-            alpha = np.zeros((T, self.num_states))
-            c = np.zeros((T))
-            alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
-            c[0] = 1/np.sum(alpha[0])
-            
-            for t in range(1, T):
-                for i in self.states:
-                    alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t-1, j]*self.transitions[j, i])(self.states)) * self.emissions[i, sample[t]]
-                c[t] = 1/np.sum(alpha[t])
-                alpha[t] = c[t]*alpha[t]
-                
-            sum_LL += np.sum(np.log(c))
-        return -sum_LL/len(dataset)
-            
-            
 
     def take_2(self, dataset, maxIters):
         #initialize
@@ -307,6 +284,7 @@ class HMM:
             emission_numerators = np.zeros((self.num_states, self.vocab_size))
             emission_denominators = np.zeros((self.num_states))
             gamma_0 = np.zeros((self.num_states))
+            sum_LL = 0
             
             for sample in dataset:
                 #expectation
@@ -320,6 +298,7 @@ class HMM:
                 #alpha pass:
                 alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
                 c[0] = 1/np.sum(alpha[0])
+                alpha[0] = alpha[0]*c[0]
                 
                 for t in range(1, T):
                     for i in self.states:
@@ -328,10 +307,9 @@ class HMM:
                     alpha[t] = c[t]*alpha[t]
                     
                 #beta pass:
-                beta[T-1] = c[T-1]
                 for t in range(T-2, -1, -1):
                     for i in self.states:
-                        beta[t] = np.sum([self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j]*c[t] for j in self.states])
+                        beta[t] = np.sum([self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j] for j in self.states])
                     
                 for t in range(T-1):
                     for i in range(self.num_states):
@@ -352,16 +330,17 @@ class HMM:
                     for k in range(self.vocab_size):
                         emission_numerators[j, k] += np.sum(gamma[np.nonzero(sample == k), j])
                     emission_denominators[j] += np.sum(gamma[:, j])
+                    
+                sum_LL += np.sum(np.log(c))
             
             #combine sample data
-            
             self.pi = self.normalize(gamma_0)
             for i in self.states:
                 for j in self.states:
                     self.transitions[i, j] = transition_numerators[i, j]/transition_denominators[i]
                     self.emissions[i, j] = emission_numerators[i, j]/emission_denominators[i]
             
-            newLL = self.LL_take_2(dataset)
+            newLL = -sum_LL/len(dataset)
             print(newLL)
             if newLL > oldLL:
                 oldLL = newLL
@@ -465,7 +444,7 @@ if __name__ == '__main__':
     hmm = HMM(num_states=10)
     print('loading and parsing dataset:')
     dataset = load_subdir(file)
-    dataset = dataset[:5]
+    dataset = dataset[:10]
     print('dataset loaded')
     #sample = load_subdir("aclImdbNorm/train/pos")
     for i in range(len(dataset)):
