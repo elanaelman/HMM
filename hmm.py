@@ -6,6 +6,8 @@
 
 import argparse
 import os
+
+import numpy
 import numpy as np
 from math import inf
 
@@ -32,7 +34,7 @@ class HMM:
     def __init__(self, num_states=10, vocab_size=255):
         self.num_states = num_states
         self.vocab_size = vocab_size
-        self.pi = np.ones(num_states) / num_states 
+        self.pi = np.ones(num_states) / num_states
         # TODO: randomize start state
         self.transitions = np.ones((num_states, num_states)) / num_states
         self.emissions = np.ones((num_states, vocab_size)) / vocab_size
@@ -110,7 +112,7 @@ class HMM:
         a_tilde = np.zeros(alpha.shape)
         a_tilde[0] = alpha[0]
 
-        #TODO: cache sums; remove a_tilde 
+        #TODO: cache sums; remove a_tilde
         c[0] = np.sum(alpha[0])  # p(observation 0)
         alpha[0] = c[0] * a_tilde[0]
         for t in range(1, len(sample)):
@@ -178,40 +180,59 @@ class HMM:
     # Note: you may find it helpful to write helper methods for the e-step and m-step,
     def em_step(self, dataset):
         # todo: for each sample, or something
-        sample = dataset[0]
-
-        T = len(sample)
-        alpha = self.alpha(sample)
-        beta = self.beta(sample)
-        alpha, beta, c = self.scale(sample, alpha, beta)
-        di_gamma = self.di_gamma(sample, alpha, beta)
-        gamma = self.gamma(sample, alpha, beta)
-        # update pi:
-        self.pi = gamma[0]
-
         # update A:
-        def t(i, j):
+        def t1(i, j, T):
             if di_gamma is None:
                 return 0
             else:
                 numerator = np.sum(di_gamma[range(T - 1), i, j])
-                denominator = np.sum(gamma[range(T), j])
-                return numerator / denominator
+                return numerator
 
-        t_vectorized = np.vectorize(t)
+        def t2(i, j, T):
+            if di_gamma is None:
+                return 0
+            else:
+                denominator = np.sum(gamma[range(T), j])
+                return denominator
+
+        t1_vectorized = np.vectorize(t1)
+        t2_vectorized = np.vectorize(t2)
 
         # update B:
-        def e(j, k):
+        def e1(j, k, T):
             indices = np.nonzero(sample == k)  # get list of times where the observation is k
             numerator = np.sum(gamma[indices, j])
-            denominator = np.sum(gamma[range(T), j])
-            return numerator / denominator
+            return numerator
 
-        e_vectorized = np.vectorize(e)
+        def e2(j, k, T):
+            denominator = np.sum(gamma[range(T), j])
+            return denominator
+
+        e1_vectorized = np.vectorize(e1)
+        e2_vectorized = np.vectorize(e2)
+        a_num = np.zeros(self.transitions.shape)
+        a_denom = np.zeros(self.transitions.shape)
+        b_num = np.zeros(self.emissions.shape)
+        b_denom = np.zeros(self.emissions.shape)
+
+        for sample in dataset:
+            T = len(sample)
+            alpha = self.alpha(sample)
+            beta = self.beta(sample)
+            alpha, beta, c = self.scale(sample, alpha, beta)
+            di_gamma = self.di_gamma(sample, alpha, beta)
+            gamma = self.gamma(sample, alpha, beta)
+            # update pi:
+            self.pi = gamma[0]
+
+            a_num += t1_vectorized(np.transpose([self.states]), [self.states], T)
+            a_denom += t2_vectorized(np.transpose([self.states]), [self.states], T)
+            b_num += e1_vectorized(np.transpose([self.states]), [range(self.vocab_size)], T)
+            b_denom += e2_vectorized(np.transpose([self.states]), [range(self.vocab_size)], T)
 
         # update model
-        self.transitions = t_vectorized(np.transpose([self.states]), [self.states])
-        self.emissions = e_vectorized(np.transpose([self.states]), [range(self.vocab_size)])
+        self.transitions = numpy.divide(a_num, a_denom)
+        self.emissions = numpy.divide(b_num, b_denom)
 
         # return updated probability
         return self.LL(dataset)
