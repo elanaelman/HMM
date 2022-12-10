@@ -217,6 +217,7 @@ class HMM:
         a_denom = np.zeros(self.transitions.shape)
         b_num = np.zeros(self.emissions.shape)
         b_denom = np.zeros(self.emissions.shape)
+        ragamma = 0
 
         for sample in dataset:
             T = len(sample)
@@ -226,7 +227,7 @@ class HMM:
             di_gamma = self.di_gamma(sample, alpha, beta)
             gamma = self.gamma(sample, alpha, beta)
             # update pi:
-            self.pi = gamma[0]
+            self.pi += gamma[0]
 
             a_num += t1_vectorized(np.transpose([self.states]), [self.states], T)
             a_denom += t2_vectorized(np.transpose([self.states]), [self.states], T)
@@ -236,6 +237,7 @@ class HMM:
         # update model
         self.transitions = numpy.divide(a_num, a_denom)
         self.emissions = numpy.divide(b_num, b_denom)
+        self.pi = self.pi/np.sum(self.pi)
 
         # return updated probability
         return self.LL(dataset)
