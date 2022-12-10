@@ -49,9 +49,20 @@ class HMM:
 
     # return the LL for a single sequence (numpy array)
     def LL_helper(self, sample):
-        alpha = self.alpha(sample)
-        beta = self.beta(sample)
-        alpha, beta, c = self.scale(sample, alpha, beta)
+        T = len(sample)
+        c = np.zeros((T))
+        alpha = np.zeros((T, self.num_states))
+        # do alpha pass:
+        alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
+        c[0] = 1 / np.sum(alpha[0])
+        alpha[0] = alpha[0] * c[0]
+        for t in range(1, T):
+            for i in self.states:
+                alpha[t, i] = np.sum(
+                    np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
+                              self.emissions[i, sample[t]]
+            c[t] = 1 / np.sum(alpha[t])
+            alpha[t] = c[t] * alpha[t]
         return -np.sum(np.log(c))
 
     # return the matrix of alphas for a given sequence of observations.
@@ -114,18 +125,17 @@ class HMM:
         a_tilde = np.zeros(alpha.shape)
         a_tilde[0] = alpha[0]
 
-        #TODO: cache sums; remove a_tilde
+        # TODO: cache sums; remove a_tilde
         c[0] = np.sum(alpha[0])  # p(observation 0)
         alpha[0] = c[0] * a_tilde[0]
         for t in range(1, len(sample)):
             for i in range(0, self.num_states):
                 product = lambda j: alpha[t - 1, j] * self.transitions[j, i] * self.emissions[i, sample[t]]
                 a_tilde[t, i] = np.sum(np.vectorize(product)(range(self.num_states)))
-            c[t] = np.sum(alpha[t])/np.sum(alpha[t-1])  # p(O_t|previous) = P(All up to T)/p(previous)
+            c[t] = np.sum(alpha[t]) / np.sum(alpha[t - 1])  # p(O_t|previous) = P(All up to T)/p(previous)
             alpha[t] = index_product(c, 0, t) * a_tilde[t]
-            beta[t] = index_product(c, t+1, len(c)-1) * beta[t]
+            beta[t] = index_product(c, t + 1, len(c) - 1) * beta[t]
         return alpha, beta, c
-
 
     # return the matrix of gammas for a given sequence of observations.
     # gamma[t, i] is the probability of being in state i at time t, given the observations.
@@ -237,7 +247,7 @@ class HMM:
         # update model
         self.transitions = numpy.divide(a_num, a_denom)
         self.emissions = numpy.divide(b_num, b_denom)
-        self.pi = self.pi/np.sum(self.pi)
+        self.pi = self.pi / np.sum(self.pi)
 
         # return updated probability
         return self.LL(dataset)
@@ -254,96 +264,102 @@ class HMM:
                 oldLL = newLL
             else:
                 break
-        #print(self.emissions)
-        
-    #helper method to randomize 2D matrix of probabilities
+        # print(self.emissions)
+
+    # helper method to randomize 2D matrix of probabilities
     def random_matrix(self, shape):
-         matrix = np.random.normal(10, 0.1, shape)
-         for i in range(shape[0]):
-             matrix[i] = matrix[i]/np.sum(matrix[i])
-         return matrix
-    #helper method to randomize a probability distribution
+        matrix = np.random.normal(10, 0.1, shape)
+        for i in range(shape[0]):
+            matrix[i] = matrix[i] / np.sum(matrix[i])
+        return matrix
+
+    # helper method to randomize a probability distribution
     def random_array(self, length):
-         arr = np.random.normal(10, 0.1, length)
-         arr = arr/np.sum(arr)
-         return arr
-    #helper method to normalize a vector
+        arr = np.random.normal(10, 0.1, length)
+        arr = arr / np.sum(arr)
+        return arr
+
+    # helper method to normalize a vector
     def normalize(self, vec):
-         return vec/np.sum(vec)
+        return vec / np.sum(vec)
 
     def take_2(self, dataset, maxIters):
-        #initialize
+        # initialize
         self.transitions = self.random_matrix((self.num_states, self.num_states))
         self.emissions = self.random_matrix((self.num_states, self.vocab_size))
         self.pi = self.random_array(self.num_states)
-        
+
         oldLL = -inf
         for m in range(maxIters):
-            #do em
-             
+            # do em
+
             transition_numerators = np.zeros((self.num_states, self.num_states))
             transition_denominators = np.zeros((self.num_states))
             emission_numerators = np.zeros((self.num_states, self.vocab_size))
             emission_denominators = np.zeros((self.num_states))
             gamma_0 = np.zeros((self.num_states))
             sum_LL = 0
-            
+
             for sample in dataset:
-                #expectation
+                # expectation
                 T = len(sample)
                 c = np.zeros((T))
                 alpha = np.zeros((T, self.num_states))
                 beta = np.zeros((T, self.num_states))
                 gamma = np.zeros((T, self.num_states))
                 di_gamma = np.zeros((T, self.num_states, self.num_states))
-                
-                #alpha pass:
+
+                # alpha pass:
                 alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
-                c[0] = 1/np.sum(alpha[0])
-                alpha[0] = alpha[0]*c[0]
-                
+                c[0] = 1 / np.sum(alpha[0])
+                alpha[0] = alpha[0] * c[0]
+
                 for t in range(1, T):
                     for i in self.states:
-                        alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t-1, j]*self.transitions[j, i])(self.states)) * self.emissions[i, sample[t]]
-                    c[t] = 1/np.sum(alpha[t])
-                    alpha[t] = c[t]*alpha[t]
-                    
-                #beta pass:
-                beta[T-1] = c[T-1]
-                for t in range(T-2, -1, -1):
+                        alpha[t, i] = np.sum(
+                            np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
+                                      self.emissions[i, sample[t]]
+                    c[t] = 1 / np.sum(alpha[t])
+                    alpha[t] = c[t] * alpha[t]
+
+                # beta pass:
+                beta[T - 1] = c[T - 1]
+                for t in range(T - 2, -1, -1):
                     for i in self.states:
-                        beta[t] = np.sum([self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j]*c[t] for j in self.states])
-                    
-                for t in range(T-1):
+                        beta[t] = np.sum(
+                            [self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] * c[t] for j in
+                             self.states])
+
+                for t in range(T - 1):
                     for i in range(self.num_states):
                         for j in range(self.num_states):
-                            di_gamma[t, i, j] = alpha[t, i]*self.transitions[i, j]*self.emissions[j, sample[t+1]]*beta[t+1, j]
+                            di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
+                                j, sample[t + 1]] * beta[t + 1, j]
                         gamma[t, i] = np.sum(di_gamma[t, i])
-                gamma[T-1] = alpha[T-1]
-                
+                gamma[T - 1] = alpha[T - 1]
+
                 gamma_0 += gamma[0]
                 for i in self.states:
-                    for t in range(T-1):
+                    for t in range(T - 1):
                         transition_denominators[i] += gamma[t, i]
                         for j in self.states:
                             transition_numerators[i, j] += di_gamma[t, i, j]
-                        
-                
+
                 for j in range(self.num_states):
                     for k in range(self.vocab_size):
                         emission_numerators[j, k] += np.sum(gamma[np.nonzero(sample == k), j])
                     emission_denominators[j] += np.sum(gamma[:, j])
-                    
+
                 sum_LL += np.sum(np.log(c))
-            
-            #combine sample data
+
+            # combine sample data
             self.pi = self.normalize(gamma_0)
             for i in self.states:
                 for j in self.states:
-                    self.transitions[i, j] = transition_numerators[i, j]/transition_denominators[i]
-                    self.emissions[i, j] = emission_numerators[i, j]/emission_denominators[i]
-            
-            newLL = -sum_LL/len(dataset)
+                    self.transitions[i, j] = transition_numerators[i, j] / transition_denominators[i]
+                    self.emissions[i, j] = emission_numerators[i, j] / emission_denominators[i]
+
+            newLL = -sum_LL / len(dataset)
             print(newLL)
             if newLL > oldLL:
                 oldLL = newLL
@@ -362,7 +378,7 @@ class HMM:
         # np.savetxt("file.csv", model, delimiter=",")
         with open(filename, 'wb') as f:
             pickle.dump(model, f)
-        print("Saved to "+filename)
+        print("Saved to " + filename)
 
 
 # Load a complete model from a file and return an HMM object (most likely using np.load and pickles)
@@ -373,7 +389,7 @@ def load_hmm(filename):
     ret.transitions = model[0]
     ret.emissions = model[1]
     ret.pi = model[2]
-    print('Loaded from '+filename)
+    print('Loaded from ' + filename)
     return hmm
 
 
@@ -404,7 +420,7 @@ def format_sample(sample):
 
 def index_product(arr, b, e):
     running = 1
-    for i in range(b, e+1):
+    for i in range(b, e + 1):
         running = running * arr[i]
     return running
 
@@ -443,24 +459,22 @@ def main():
 if __name__ == '__main__':
     # filepath for elana:
     file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos"
-    #file = "aclImdbNorm/train/pos"
+    # file = "aclImdbNorm/train/pos"
     hmm = HMM(num_states=10)
     print('loading and parsing dataset:')
-    #dataset = load_subdir(file)
+    # dataset = load_subdir(file)
     dataset = ['abc', 'def']
     print('dataset loaded')
-    #sample = load_subdir("aclImdbNorm/train/pos")
+    # sample = load_subdir("aclImdbNorm/train/pos")
     for i in range(len(dataset)):
         dataset[i] = format_sample(dataset[i])
     print('dataset parsed')
     hmm.take_2(dataset, 10)
-
 
     # hmm.save_model('model.pickle')
     # please = load_hmm('model.pickle')
     # print(hmm.transitions - please.transitions)
     # print(hmm.emissions - please.emissions)
     # print(hmm.pi - please.pi)
-
 
     # main()
