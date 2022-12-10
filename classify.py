@@ -22,14 +22,14 @@ def main():
     # test samples from positive datapath    
     samples = load_subdir(os.path.join(args.datapath, 'pos'))
     for sample in samples:
-        if pos.LL(sample) > neg.LL(sample):
+        if pos_hmm.LL(sample) > neg_hmm.LL(sample):
             correct += 1
         total += 1
             
     # test samples from negative datapath
     samples = load_subdir(os.path.join(args.datapath, 'neg'))
     for sample in samples:
-        if pos.LL(sample) < neg.LL(sample):
+        if pos_hmm.LL(sample) < neg_hmm.LL(sample):
             correct += 1
         total += 1
         
