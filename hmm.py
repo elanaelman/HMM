@@ -351,15 +351,17 @@ if __name__ == '__main__':
     # file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/10551_7.txt"
     # file = "aclImdbNorm/train/pos/10551_7.txt"
     hmm = HMM(num_states=10)
-    sample = format_sample('ab')
+    sample = load_subdir("aclImdbNorm/train/pos")
+    for i in range(len(sample)):
+        sample[i] = format_sample(sample[i])
     hmm.train(sample, 100)
 
 
-    hmm.save_model('model.pickle')
-    please = load_hmm('model.pickle')
-    print(hmm.transitions - please.transitions)
-    print(hmm.emissions - please.emissions)
-    print(hmm.pi - please.pi)
+    # hmm.save_model('model.pickle')
+    # please = load_hmm('model.pickle')
+    # print(hmm.transitions - please.transitions)
+    # print(hmm.emissions - please.emissions)
+    # print(hmm.pi - please.pi)
 
 
     # main()
