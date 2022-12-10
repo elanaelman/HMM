@@ -36,10 +36,9 @@ class HMM:
     def __init__(self, num_states=10, vocab_size=255):
         self.num_states = num_states
         self.vocab_size = vocab_size
-        self.pi = np.ones(num_states) / num_states
-        # TODO: randomize start state
-        self.transitions = np.ones((num_states, num_states)) / num_states
-        self.emissions = np.ones((num_states, vocab_size)) / vocab_size
+        self.transitions = self.random_matrix((self.num_states, self.num_states))
+        self.emissions = self.random_matrix((self.num_states, self.vocab_size))
+        self.pi = self.random_array(self.num_states)
         self.states = np.arange(num_states)
 
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
@@ -65,206 +64,11 @@ class HMM:
             alpha[t] = c[t] * alpha[t]
         return -np.sum(np.log(c))
 
-    # return the matrix of alphas for a given sequence of observations.
-    # alpha[t, i] is the probability of the partial observation sequence up to time t,
-    # such that the model is in hidden state i at time t.
-    # formula taken from section 4.1 of Stamp's paper.
-    def alpha(self, sample):
-        # initialize alpha
-        a = np.zeros((len(sample), self.num_states))
-        # set each alpha at time 0 to
-        # the prior pi(i) times the probability of observing sample[0] in state i.
-        a[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
-
-        # helper function for the interior of the sum term
-        def op(t, i, j):
-            return a[t, j] * self.transitions[j, i]
-
-        ops = np.vectorize(op)
-
-        # helper function for computing each element
-        def a_val(t, i):
-            return np.sum(ops(t - 1, i, self.states)) * self.emissions[i, sample[t]]
-
-        a_vals = np.vectorize(a_val, excluded='t')
-
-        for t in range(1, len(sample)):
-            # compute alpha at t, i
-            a[t] = a_vals(t, self.states)
-
-        return a
-
-    # return the matrix of betas for a given sequence of observations.
-    # beta[t, i] is the probability of observations after time t,
-    # given that the model is in state i at time t.
-    # formula taken from section 4.2 of Stamp's paper.
-    def beta(self, sample):
-        # initialize beta
-        b = np.ones((len(sample), self.num_states))
-
-        # helper function for the interior of the sum term
-        def op(t, i, j):
-            return b[t, j] * self.transitions[i, j] * self.emissions[j, sample[t]]
-
-        ops = np.vectorize(op)
-
-        # helper function for computing the sum term
-        def sum_ops(t, i):
-            return np.sum(ops(t, i, self.states))
-
-        # todo: vectorize
-        for t in range(len(sample) - 2, -1, -1):  # go backwards through indices
-            for i in self.states:
-                # compute beta at t, i.
-                b[t, i] = sum_ops(t + 1, i)
-
-        return b
-
-    def scale(self, sample, alpha, beta):
-        c = np.zeros((len(sample)))
-        a_tilde = np.zeros(alpha.shape)
-        a_tilde[0] = alpha[0]
-
-        # TODO: cache sums; remove a_tilde
-        c[0] = np.sum(alpha[0])  # p(observation 0)
-        alpha[0] = c[0] * a_tilde[0]
-        for t in range(1, len(sample)):
-            for i in range(0, self.num_states):
-                product = lambda j: alpha[t - 1, j] * self.transitions[j, i] * self.emissions[i, sample[t]]
-                a_tilde[t, i] = np.sum(np.vectorize(product)(range(self.num_states)))
-            c[t] = np.sum(alpha[t]) / np.sum(alpha[t - 1])  # p(O_t|previous) = P(All up to T)/p(previous)
-            alpha[t] = index_product(c, 0, t) * a_tilde[t]
-            beta[t] = index_product(c, t + 1, len(c) - 1) * beta[t]
-        return alpha, beta, c
-
-    # return the matrix of gammas for a given sequence of observations.
-    # gamma[t, i] is the probability of being in state i at time t, given the observations.
-    # formula taken from section 4.2 of Stamp's paper.
-    def gamma(self, sample, alpha=None, beta=None):
-        # first calculate alpha and beta, if needed.
-        if alpha is None:
-            alpha = self.alpha(sample)
-        if beta is None:
-            beta = self.beta(sample)
-
-        # Calculate the total probability of the observations:
-        p_o = np.sum(alpha[len(sample) - 1])
-
-        # helper function defining gamma for each term
-        def g(t, i):
-            return alpha[t, i] * beta[t, i] / p_o
-
-        gs = np.vectorize(g)
-
-        # construct matrix
-        return gs(np.transpose([range(len(sample))]), [self.states])
 
     # return the most likely state at time t based on a sequence of observations
     # formula from section 4.2 of Stamp's paper.
-    def guess_state(self, sample, t, gamma=None):
-        # construct gamma if necessary
-        if gamma == None:
-            gamma = self.gamma(sample, t)
-        return np.argmax(gamma)
-
-    # Return the matrix of gammas for a given sequence of observations.
-    # gamma[t, i, j] is the probability of being in state i at time t and then
-    # transitioning to state j at time t+1, given a sequence of observations.
-    # Formula from section 4.3 of Stamp's paper.
-    def di_gamma(self, sample, alpha, beta):
-        if len(sample) == 1:
-            return None
-        d_g = np.zeros((len(sample), self.num_states, self.num_states))
-
-        p_o = np.sum(alpha[len(sample) - 1])
-
-        def d_g(t, i, j):
-            return alpha[t, i] * self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] / p_o
-
-        d_gs = np.vectorize(d_g)
-
-        return d_gs(np.array([[range(len(sample) - 1)]]).transpose(2, 0, 1),
-                    np.transpose([[self.states]], (0, 2, 1)),
-                    [[self.states]])
-
-    # apply a single step of the em algorithm to the model on all the training data,
-    # which is most likely a python list of numpy matrices (one per sample).
-    # Note: you may find it helpful to write helper methods for the e-step and m-step,
-    def em_step(self, dataset):
-        # todo: for each sample, or something
-        # update A:
-        def t1(i, j, T):
-            if di_gamma is None:
-                return 0
-            else:
-                numerator = np.sum(di_gamma[range(T - 1), i, j])
-                return numerator
-
-        def t2(i, j, T):
-            if di_gamma is None:
-                return 0
-            else:
-                denominator = np.sum(gamma[range(T), j])
-                return denominator
-
-        t1_vectorized = np.vectorize(t1)
-        t2_vectorized = np.vectorize(t2)
-
-        # update B:
-        def e1(j, k, T):
-            indices = np.nonzero(sample == k)  # get list of times where the observation is k
-            numerator = np.sum(gamma[indices, j])
-            return numerator
-
-        def e2(j, k, T):
-            denominator = np.sum(gamma[range(T), j])
-            return denominator
-
-        e1_vectorized = np.vectorize(e1)
-        e2_vectorized = np.vectorize(e2)
-
-        a_num = np.zeros(self.transitions.shape)
-        a_denom = np.zeros(self.transitions.shape)
-        b_num = np.zeros(self.emissions.shape)
-        b_denom = np.zeros(self.emissions.shape)
-        ragamma = 0
-
-        for sample in dataset:
-            T = len(sample)
-            alpha = self.alpha(sample)
-            beta = self.beta(sample)
-            alpha, beta, c = self.scale(sample, alpha, beta)
-            di_gamma = self.di_gamma(sample, alpha, beta)
-            gamma = self.gamma(sample, alpha, beta)
-            # update pi:
-            self.pi += gamma[0]
-
-            a_num += t1_vectorized(np.transpose([self.states]), [self.states], T)
-            a_denom += t2_vectorized(np.transpose([self.states]), [self.states], T)
-            b_num += e1_vectorized(np.transpose([self.states]), [range(self.vocab_size)], T)
-            b_denom += e2_vectorized(np.transpose([self.states]), [range(self.vocab_size)], T)
-
-        # update model
-        self.transitions = numpy.divide(a_num, a_denom)
-        self.emissions = numpy.divide(b_num, b_denom)
-        self.pi = self.pi / np.sum(self.pi)
-
-        # return updated probability
-        return self.LL(dataset)
-
-    # todo: full dataset
-    def train(self, dataset, maxIters):
-
-        oldLL = -inf
-        for i in range(maxIters):
-            self.em_step(dataset)
-            newLL = self.LL(dataset)
-            print(newLL)
-            if newLL > oldLL:
-                oldLL = newLL
-            else:
-                break
-        # print(self.emissions)
+    def guess_state(self, sample, t, gamma):
+        return np.argmax(gamma[t])
 
     # helper method to randomize 2D matrix of probabilities
     def random_matrix(self, shape):
@@ -282,90 +86,115 @@ class HMM:
     # helper method to normalize a vector
     def normalize(self, vec):
         return vec / np.sum(vec)
+    
+    def alpha_pass(self, sample):
+        T = len(sample)
+        c = np.zeros((T))
+        alpha = np.zeros((T, self.num_states))
+        
+        alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
+        c[0] = 1 / np.sum(alpha[0])
+        alpha[0] = alpha[0] * c[0]
 
-    def take_2(self, dataset, maxIters):
-        # initialize
-        self.transitions = self.random_matrix((self.num_states, self.num_states))
-        self.emissions = self.random_matrix((self.num_states, self.vocab_size))
-        self.pi = self.random_array(self.num_states)
+        for t in range(1, T):
+            for i in self.states:
+                alpha[t, i] = np.sum(
+                    np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
+                              self.emissions[i, sample[t]]
+            c[t] = 1 / np.sum(alpha[t])
+            alpha[t] = c[t] * alpha[t]
+        return alpha, c
+    
+    def beta_pass(self, sample, c):
+        T = len(sample)
+        beta = np.zeros((T, self.num_states))
+        beta[T - 1] = c[T - 1]
+        for t in range(T - 2, -1, -1):
+            for i in self.states:
+                beta[t] = np.sum(
+                    [self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] * c[t] for j in
+                     self.states])
+        return beta
+    
+    def calc_gammas(self, sample, alpha, beta):
+        T = len(sample)
+        gamma = np.zeros((T, self.num_states))
+        di_gamma = np.zeros((T, self.num_states, self.num_states))
+    
+        # calculate gammas:
+        for t in range(T - 1):
+            for i in range(self.num_states):
+                for j in range(self.num_states):
+                    di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
+                        j, sample[t + 1]] * beta[t + 1, j]
+                gamma[t, i] = np.sum(di_gamma[t, i])
+        gamma[T - 1] = alpha[T - 1]
+        return gamma, di_gamma
+        
+        
+        
+    
+    def estimate(self, sample):
+        # alpha[t, i] is the probability of the partial observation sequence up to time t,
+        # such that the model is in hidden state i at time t.
+        # beta[t, i] is the probability of observations after time t,
+        # given that the model is in state i at time t.
+        # gamma[t, i] is the probability of being in state i at time t, given the observations.
+        # di_gamma[t, i, j] is the probability of being in state i at time t and then
+        # transitioning to state j at time t+1, given a sequence of observations.
+        alpha, c = self.alpha_pass(sample)
+        beta = self.beta_pass(sample, c)
+        gamma, di_gamma = self.calc_gammas(sample, alpha, beta)
+        return alpha, beta, c, gamma, di_gamma
 
+    def em_step(self, dataset):
+        
+        transition_numerators = np.zeros((self.num_states, self.num_states))
+        transition_denominators = np.zeros((self.num_states))
+        emission_numerators = np.zeros((self.num_states, self.vocab_size))
+        emission_denominators = np.zeros((self.num_states))
+        gamma_0 = np.zeros((self.num_states))
+        sum_LL = 0
+
+        for sample in dataset:   
+            alpha, beta, c, gamma, di_gamma = self.estimate(sample)
+
+            gamma_0 += gamma[0]
+            for i in self.states:
+                for t in range(len(sample) - 1):
+                    transition_denominators[i] += gamma[t, i]
+                    for j in self.states:
+                        transition_numerators[i, j] += di_gamma[t, i, j]
+
+            for j in range(self.num_states):
+                for k in range(self.vocab_size):
+                    emission_numerators[j, k] += np.sum(gamma[np.nonzero(sample == k), j])
+                emission_denominators[j] += np.sum(gamma[:, j])
+
+            sum_LL += np.sum(np.log(c))
+
+        # combine sample data
+        self.pi = self.normalize(gamma_0)
+        for i in self.states:
+            for j in self.states:
+                self.transitions[i, j] = transition_numerators[i, j] / transition_denominators[i]
+                self.emissions[i, j] = emission_numerators[i, j] / emission_denominators[i]
+
+        newLL = -sum_LL / len(dataset)
+        return newLL
+        
+        
+    def train(self, dataset, maxIters):
         oldLL = -inf
         for m in range(maxIters):
-            # do em
-
-            transition_numerators = np.zeros((self.num_states, self.num_states))
-            transition_denominators = np.zeros((self.num_states))
-            emission_numerators = np.zeros((self.num_states, self.vocab_size))
-            emission_denominators = np.zeros((self.num_states))
-            gamma_0 = np.zeros((self.num_states))
-            sum_LL = 0
-
-            for sample in dataset:
-                # expectation
-                T = len(sample)
-                c = np.zeros((T))
-                alpha = np.zeros((T, self.num_states))
-                beta = np.zeros((T, self.num_states))
-                gamma = np.zeros((T, self.num_states))
-                di_gamma = np.zeros((T, self.num_states, self.num_states))
-
-                # alpha pass:
-                alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
-                c[0] = 1 / np.sum(alpha[0])
-                alpha[0] = alpha[0] * c[0]
-
-                for t in range(1, T):
-                    for i in self.states:
-                        alpha[t, i] = np.sum(
-                            np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
-                                      self.emissions[i, sample[t]]
-                    c[t] = 1 / np.sum(alpha[t])
-                    alpha[t] = c[t] * alpha[t]
-
-                # beta pass:
-                beta[T - 1] = c[T - 1]
-                for t in range(T - 2, -1, -1):
-                    for i in self.states:
-                        beta[t] = np.sum(
-                            [self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] * c[t] for j in
-                             self.states])
-
-                for t in range(T - 1):
-                    for i in range(self.num_states):
-                        for j in range(self.num_states):
-                            di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
-                                j, sample[t + 1]] * beta[t + 1, j]
-                        gamma[t, i] = np.sum(di_gamma[t, i])
-                gamma[T - 1] = alpha[T - 1]
-
-                gamma_0 += gamma[0]
-                for i in self.states:
-                    for t in range(T - 1):
-                        transition_denominators[i] += gamma[t, i]
-                        for j in self.states:
-                            transition_numerators[i, j] += di_gamma[t, i, j]
-
-                for j in range(self.num_states):
-                    for k in range(self.vocab_size):
-                        emission_numerators[j, k] += np.sum(gamma[np.nonzero(sample == k), j])
-                    emission_denominators[j] += np.sum(gamma[:, j])
-
-                sum_LL += np.sum(np.log(c))
-
-            # combine sample data
-            self.pi = self.normalize(gamma_0)
-            for i in self.states:
-                for j in self.states:
-                    self.transitions[i, j] = transition_numerators[i, j] / transition_denominators[i]
-                    self.emissions[i, j] = emission_numerators[i, j] / emission_denominators[i]
-
-            newLL = -sum_LL / len(dataset)
+            newLL = self.em_step(dataset)
             print(newLL)
-            if newLL > oldLL:
+            if newLL >= oldLL:
                 oldLL = newLL
             else:
                 print(f'Log likelihood decreased on iteration {m}.')
                 break
+        
 
     # Return a "completed" sample by additing additional steps based on model probability.
     def complete_sequence(self, sample, steps):
@@ -469,7 +298,7 @@ if __name__ == '__main__':
     for i in range(len(dataset)):
         dataset[i] = format_sample(dataset[i])
     print('dataset parsed')
-    hmm.take_2(dataset, 10)
+    hmm.train(dataset, 10)
 
     # hmm.save_model('model.pickle')
     # please = load_hmm('model.pickle')
