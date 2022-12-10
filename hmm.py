@@ -66,8 +66,8 @@ class HMM:
 
 
     # return the most likely state at time t based on a sequence of observations
-    # formula from section 4.2 of Stamp's paper.
-    def guess_state(self, sample, t, gamma):
+    def guess_state(self, sample, t):
+        alpha, beta, c, gamma, di_gamma = self.estimate(sample)
         return np.argmax(gamma[t])
 
     # helper method to randomize 2D matrix of probabilities
@@ -123,8 +123,8 @@ class HMM:
     
         # calculate gammas:
         for t in range(T - 1):
-            for i in range(self.num_states):
-                for j in range(self.num_states):
+            for i in self.states:
+                for j in self.states:
                     di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
                         j, sample[t + 1]] * beta[t + 1, j]
                 gamma[t, i] = np.sum(di_gamma[t, i])
@@ -166,7 +166,7 @@ class HMM:
                     for j in self.states:
                         transition_numerators[i, j] += di_gamma[t, i, j]
 
-            for j in range(self.num_states):
+            for j in self.states:
                 for k in range(self.vocab_size):
                     emission_numerators[j, k] += np.sum(gamma[np.nonzero(sample == k), j])
                 emission_denominators[j] += np.sum(gamma[:, j])
@@ -219,7 +219,7 @@ def load_hmm(filename):
     ret.emissions = model[1]
     ret.pi = model[2]
     print('Loaded from ' + filename)
-    return hmm
+    return ret
 
 
 # Load all the files in a subdirectory and return a giant list.
@@ -231,27 +231,11 @@ def load_subdir(path):
     return data
 
 
-# load a single review
-def load_sample(file):
-    o = open(file)
-    f = o.read()
-    o.close()
-    return f
-
-
 # convert text sample to a string of integers
 to_int = np.vectorize(ord)
 
-
-def format_sample(sample):
-    return to_int(list(sample))
-
-
-def index_product(arr, b, e):
-    running = 1
-    for i in range(b, e + 1):
-        running = running * arr[i]
-    return running
+def format_dataset(dataset):
+    return [to_int(list(sample)) for sample in dataset]
 
 
 def main():
@@ -263,9 +247,6 @@ def main():
     parser.add_argument('--hidden_states', type=int, default=10,
                         help='The number of hidden states to use. (default 10)')
     args = parser.parse_args()
-
-    hmm = HMM()
-    hmm.p(0)
 
     # OVERALL PROJECT ALGORITHM:
     # 1. load training and testing data into memory
@@ -291,19 +272,16 @@ if __name__ == '__main__':
     # file = "aclImdbNorm/train/pos"
     hmm = HMM(num_states=10)
     print('loading and parsing dataset:')
-    # dataset = load_subdir(file)
-    dataset = ['abc', 'def']
+    dataset = format_dataset(load_subdir(file))[:10]
+    #dataset = ['abc', 'def']
     print('dataset loaded')
     # sample = load_subdir("aclImdbNorm/train/pos")
-    for i in range(len(dataset)):
-        dataset[i] = format_sample(dataset[i])
     print('dataset parsed')
     hmm.train(dataset, 10)
-
-    # hmm.save_model('model.pickle')
+    
+    
+    hmm.save_model('model.pickle')
     # please = load_hmm('model.pickle')
     # print(hmm.transitions - please.transitions)
     # print(hmm.emissions - please.emissions)
     # print(hmm.pi - please.pi)
-
-    # main()
