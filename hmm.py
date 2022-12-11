@@ -10,6 +10,7 @@ import os
 import numpy
 import numpy as np
 from math import inf
+import time
 
 import pickle
 
@@ -42,28 +43,15 @@ class HMM:
         self.states = np.arange(num_states)
 
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
+    #TODO: combine with LL_helper for speed?
     def LL(self, dataset):
         # apply LL_helper to each sample in dataset. Return average.
         return np.average([self.LL_helper(sample) for sample in dataset])
 
     # return the LL for a single sequence (numpy array)
     def LL_helper(self, sample):
-        T = len(sample)
-        c = np.zeros((T))
-        alpha = np.zeros((T, self.num_states))
-        # do alpha pass:
-        alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
-        c[0] = 1 / np.sum(alpha[0])
-        alpha[0] = alpha[0] * c[0]
-        for t in range(1, T):
-            for i in self.states:
-                alpha[t, i] = np.sum(
-                    np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
-                              self.emissions[i, sample[t]]
-            c[t] = 1 / np.sum(alpha[t])
-            alpha[t] = c[t] * alpha[t]
+        c = self.alpha_pass(sample)[1]
         return -np.sum(np.log(c))
-
 
     # return the most likely state at time t based on a sequence of observations
     def guess_state(self, sample, t):
@@ -88,6 +76,7 @@ class HMM:
         return vec / np.sum(vec)
     
     def alpha_pass(self, sample):
+        
         T = len(sample)
         c = np.zeros((T))
         alpha = np.zeros((T, self.num_states))
@@ -95,14 +84,27 @@ class HMM:
         alpha[0] = np.vectorize(lambda i: self.pi[i] * self.emissions[i, sample[0]])(self.states)
         c[0] = 1 / np.sum(alpha[0])
         alpha[0] = alpha[0] * c[0]
-
+        
+        '''
+        f = lambda x: x**2
+        x = [1, 2, 3]
+        f(x)
+        '''
+        
+        
+        #f = lambda t, i, j: alpha[t - 1, j] * self.transitions[j, i]
+        #g = lambda t, i: np.sum(f(np.transpose([t]), [i], [[self.states]])) * self.emissions[i, sample[t]]
+        #test_alpha = np.zeros((T, self.num_states))
+        
         for t in range(1, T):
             for i in self.states:
-                alpha[t, i] = np.sum(
-                    np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
-                              self.emissions[i, sample[t]]
+                alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states))*self.emissions[i, sample[t]]
             c[t] = 1 / np.sum(alpha[t])
             alpha[t] = c[t] * alpha[t]
+            
+        #test_alpha = g(np.transpose([np.arange(1, T)]), [self.states])
+        #print(alpha-test_alpha)
+        
         return alpha, c
     
     def beta_pass(self, sample, c):
@@ -142,9 +144,17 @@ class HMM:
         # gamma[t, i] is the probability of being in state i at time t, given the observations.
         # di_gamma[t, i, j] is the probability of being in state i at time t and then
         # transitioning to state j at time t+1, given a sequence of observations.
+        
+        #start_time = time.time()
         alpha, c = self.alpha_pass(sample)
+        #after_alpha = time.time()
+        #print(f'\tAlpha took {after_alpha-start_time} s')
         beta = self.beta_pass(sample, c)
+        #after_beta = time.time()
+        #print(f'\tBeta took {after_beta-after_alpha} s')
         gamma, di_gamma = self.calc_gammas(sample, alpha, beta)
+        #after_gamma = time.time()
+        #print(f'\tGamma took {after_gamma-after_beta} s')
         return alpha, beta, c, gamma, di_gamma
 
     def em_step(self, dataset):
@@ -184,10 +194,19 @@ class HMM:
         return newLL
         
         
-    def train(self, dataset, maxIters):
+    def train(self, train_data, test_data, maxIters):
         oldLL = -inf
+        
+        timer = time.time()
+        
         for m in range(maxIters):
-            newLL = self.em_step(dataset)
+            self.em_step(train_data)
+            newLL = self.LL(test_data)
+            
+            new_time = time.time()
+            print(f'iteration {m} took {new_time - timer} seconds')
+            timer = new_time
+            
             print(newLL)
             if newLL >= oldLL:
                 oldLL = newLL
@@ -198,7 +217,16 @@ class HMM:
 
     # Return a "completed" sample by additing additional steps based on model probability.
     def complete_sequence(self, sample, steps):
-        pass
+        T = len(sample)
+        alpha, c = self.alpha_pass(sample)
+        prevState = np.argmax(alpha[T-1])
+        additions = []
+        for t in range(steps):
+            state = np.random.choice(self.num_states, p=self.transitions[prevState])
+            character = np.random.choice(self.vocab_size, p=self.emissions[state])
+            additions.append(character)
+            prevState = state
+        return additions
 
     # Save the complete model to a file (most likely using np.save and pickles)
     def save_model(self, filename):
@@ -230,6 +258,12 @@ def load_subdir(path):
             data.append(fh.read())
     return data
 
+def load_sample(path):
+    data = []
+    with open(path) as file:
+        data.append(file.read())
+    return data
+
 
 # convert text sample to a string of integers
 to_int = np.vectorize(ord)
@@ -239,6 +273,7 @@ def format_dataset(dataset):
 
 
 def main():
+    '''
     parser = argparse.ArgumentParser(description='Program to build and train a neural network.')
     parser.add_argument('--dev_path', default=None, help='Path to development (i.e., testing) data.')
     parser.add_argument('--train_path', default=None, help='Path to the training data directory.')
@@ -247,41 +282,22 @@ def main():
     parser.add_argument('--hidden_states', type=int, default=10,
                         help='The number of hidden states to use. (default 10)')
     args = parser.parse_args()
+    
+    hmm = HMM(args.hidden_states)
+    print('loading datasets...')
+    train_dataset = format_dataset(load_subdir(args.train_path))
+    test_dataset = format_dataset(load_subdir(args.dev_path))
+    print('datasets loaded')
+    hmm.train(train_dataset, test_dataset, args.max_iters)
+    
+    if args.model_out is not None:
+        hmm.save_model(args.model_out)
+    '''
+    
+    dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
 
-    # OVERALL PROJECT ALGORITHM:
-    # 1. load training and testing data into memory
-    #
-    # 2. build vocabulary using training data ONLY
-    #
-    # 3. instantiate an HMM with given number of states -- initial parameters can
-    #    be random or uniform for transitions and inital state distributions,
-    #    initial emission parameters could bea uniform OR based on vocabulary
-    #    frequency (you'll have to count the words/characters as they occur in
-    #    the training data.)
-    #
-    # 4. output initial loglikelihood on training data and on testing data
-    #
-    # 5+. use EM to train the HMM on the training data,
-    #     output loglikelihood on train and test after each iteration
-    #     if it converges early, stop the loop and print a message
-
+    hmm = HMM(num_states=10)
+    hmm.train(dataset, dataset, 5)
 
 if __name__ == '__main__':
-    # filepath for elana:
-    file = "C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos"
-    # file = "aclImdbNorm/train/pos"
-    hmm = HMM(num_states=10)
-    print('loading and parsing dataset:')
-    dataset = format_dataset(load_subdir(file))[:10]
-    #dataset = ['abc', 'def']
-    print('dataset loaded')
-    # sample = load_subdir("aclImdbNorm/train/pos")
-    print('dataset parsed')
-    hmm.train(dataset, 10)
-    
-    
-    hmm.save_model('model.pickle')
-    # please = load_hmm('model.pickle')
-    # print(hmm.transitions - please.transitions)
-    # print(hmm.emissions - please.emissions)
-    # print(hmm.pi - please.pi)
+    main()

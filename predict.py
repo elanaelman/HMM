@@ -21,15 +21,15 @@ def main():
     total = 0
     samples = format_dataset(load_subdir(args.test_data))
     time = 10
+    steps = 2
     
     for sample in samples:
-        if len(sample) > time + 1:
-            alpha, c = hmm.alpha_pass(sample)
-            probable_state = np.argmax(alpha[time])
-            probable_character = np.argmax(hmm.emissions[probable_state])
+        if len(sample) >= time + steps:
+            short_sample = sample[:time]
+            prediction = hmm.complete_sequence(short_sample, steps)
             
             total += 1
-            if sample[time+1] == probable_character:
+            if [sample[time+step] == prediction[step] for step in range(steps)].all():
                 correct += 1
     accuracy = correct/total
     print(f"Probability of correctly guessing character {time} based on the preceeding string is {accuracy}%.")
