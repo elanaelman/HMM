@@ -27,16 +27,16 @@ def classify_run(pos_hmm=None, neg_hmm=None, path=None, sample_size=10):
     total = 0
 
     # test samples from positive datapath
-    samples = pick_data(load_subdir(os.path.join(datapath, 'pos')), sample_size)
+    samples = pick_data(format_dataset(load_subdir(os.path.join(datapath, 'pos'))), sample_size)
     for sample in samples:
-        if pos_hmm.LL(sample) > neg_hmm.LL(sample):
+        if pos_hmm.LL_helper(sample) > neg_hmm.LL_helper(sample):
             correct += 1
         total += 1
 
     # test samples from negative datapath
-    samples = pick_data(load_subdir(os.path.join(datapath, 'neg')), sample_size)
+    samples = pick_data(format_dataset(load_subdir(os.path.join(datapath, 'neg'))), sample_size)
     for sample in samples:
-        if pos_hmm.LL(sample) < neg_hmm.LL(sample):
+        if pos_hmm.LL_helper(sample) < neg_hmm.LL_helper(sample):
             correct += 1
         total += 1
 
