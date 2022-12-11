@@ -76,7 +76,6 @@ class HMM:
         return vec / np.sum(vec)
     
     def alpha_pass(self, sample):
-        print(sample)
         T = len(sample)
         c = np.zeros((T))
         alpha = np.zeros((T, self.num_states))
@@ -256,6 +255,12 @@ def load_sample(path):
         data.append(file.read())
     return data
 
+def pick_data(dataset, count):
+    idx = np.random.choice(np.arange(len(dataset)), count)
+    ret = []
+    for i in idx:
+        ret.append(dataset[i])
+    return ret
 
 # convert text sample to a string of integers
 to_int = np.vectorize(ord)
@@ -286,8 +291,12 @@ def main():
         hmm.save_model(args.model_out)
     '''
     
-    dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
+    #dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
 
+    print("Loading and parsing data")
+    dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/pos/')), 100)
+    print("Data loaded and parsed")
+    
     for i in range(10):
         hmm = HMM(num_states=10)
         hmm.train(dataset, 2)
