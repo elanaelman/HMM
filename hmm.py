@@ -85,13 +85,26 @@ class HMM:
         c[0] = 1 / np.sum(alpha[0])
         alpha[0] = alpha[0] * c[0]
         
+        '''
+        f = lambda x: x**2
+        x = [1, 2, 3]
+        f(x)
+        '''
+        
+        
+        #f = lambda t, i, j: alpha[t - 1, j] * self.transitions[j, i]
+        #g = lambda t, i: np.sum(f(np.transpose([t]), [i], [[self.states]])) * self.emissions[i, sample[t]]
+        #test_alpha = np.zeros((T, self.num_states))
+        
         for t in range(1, T):
-            f = lambda i, j: alpha[t - 1, j] * self.transitions[j, i]
-            g = lambda i: np.sum(f(i, self.states))*self.emissions[i, sample[t]]
-            alpha[t] = g(self.states)
+            for i in self.states:
+                alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states))*self.emissions[i, sample[t]]
             c[t] = 1 / np.sum(alpha[t])
             alpha[t] = c[t] * alpha[t]
             
+        #test_alpha = g(np.transpose([np.arange(1, T)]), [self.states])
+        #print(alpha-test_alpha)
+        
         return alpha, c
     
     def beta_pass(self, sample, c):
@@ -99,12 +112,10 @@ class HMM:
         beta = np.zeros((T, self.num_states))
         beta[T - 1] = c[T - 1]
         for t in range(T - 2, -1, -1):
-            #f = lambda i, j: self.transitions[i, j] * self.emissions[j, sample[t+1]] * beta[t+1, j]
-            #g = lambda i: np.sum(f(i, self.states))*c[t]
             for i in self.states:
-                beta[t, i] = np.sum([self.transitions[i, j] * self.emissions[j, sample[t+1]] * beta[t+1, j] for j in self.states])*c[t]
-            #new_beta = g(self.states)
-            #print(beta[t]-new_beta)
+                beta[t] = np.sum(
+                    [self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] * c[t] for j in
+                     self.states])
         return beta
     
     def calc_gammas(self, sample, alpha, beta):
@@ -115,11 +126,14 @@ class HMM:
         # calculate gammas:
         for t in range(T - 1):
             for i in self.states:
-                f = lambda j: alpha[t, i] * self.transitions[i, j] * self.emissions[j, sample[t+1]] * beta[t+1, j]
-                di_gamma[t, i] = f(self.states)
+                for j in self.states:
+                    di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
+                        j, sample[t + 1]] * beta[t + 1, j]
                 gamma[t, i] = np.sum(di_gamma[t, i])
         gamma[T - 1] = alpha[T - 1]
         return gamma, di_gamma
+        
+        
         
     
     def estimate(self, sample):
