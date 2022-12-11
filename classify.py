@@ -44,17 +44,15 @@ def classify_run(pos_hmm=None, neg_hmm=None, path=None, sample_size=10):
     print("%d/%d correct; accuracy %f" % (correct, total, correct / total))
 
 
-def train(states = 10, max_iters=20, sample_size=10):
-    # pos_dataset = format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/'))
-    # neg_dataset = format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/neg/'))
+def train(states=10, max_iters=20, sample_size=10, pos_name='pos.ickle', neg_name='neg.pickle'):
     pos_dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/pos/')), sample_size)
     neg_dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/neg/')), sample_size)
     pos_hmm = HMM(num_states=states)
     neg_hmm = HMM(num_states=states)
     pos_hmm.train(pos_dataset, max_iters)
     neg_hmm.train(neg_dataset, max_iters)
-    pos_hmm.save_model('pos.pickle')
-    neg_hmm.save_model('neg.pickle')
+    pos_hmm.save_model(pos_name)
+    neg_hmm.save_model(pos_name)
 
 
 def classify_args():
@@ -64,6 +62,7 @@ def classify_args():
     parser.add_argument('--datapath', default=None, help='Path to the test data.')
     args = parser.parse_args()
     return args
+
 
 if __name__ == '__main__':
     classify_run()
