@@ -11,6 +11,11 @@ def main():
     parser.add_argument('--datapath', default=None, help='Path to the test data.')
 
     args = parser.parse_args()
+    
+    if args.pos_hmm is None and args.neg_hmm is None:
+        train()
+        args.pos_hmm = "pos.pickle"
+        args.neg_hmm = "neg.pickle"
 
     # Load HMMs 
     pos_hmm = load_hmm(args.pos_hmm)
@@ -35,6 +40,18 @@ def main():
         
     # report accuracy  (no need for F1 on balanced data)
     print("%d/%d correct; accuracy %f"%(correct, total, correct/total))
+    
+def train():
+    max_iters = 20
+    pos_dataset = format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/'))
+    neg_dataset = format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/neg/'))
+    pos_hmm = HMM()
+    neg_hmm = HMM()
+    pos_hmm.train(pos_dataset, max_iters)
+    neg_hmm.train(neg_dataset, max_iters)
+    
+    pos_hmm.save_model('pos.pickle')
+    neg_hmm.save_model('neg.pickle')
     
 if __name__ == '__main__':
     main()

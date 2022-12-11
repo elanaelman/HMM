@@ -76,7 +76,7 @@ class HMM:
         return vec / np.sum(vec)
     
     def alpha_pass(self, sample):
-        
+        print(sample)
         T = len(sample)
         c = np.zeros((T))
         alpha = np.zeros((T, self.num_states))
@@ -85,25 +85,19 @@ class HMM:
         c[0] = 1 / np.sum(alpha[0])
         alpha[0] = alpha[0] * c[0]
         
-        '''
-        f = lambda x: x**2
-        x = [1, 2, 3]
-        f(x)
-        '''
-        
-        
-        #f = lambda t, i, j: alpha[t - 1, j] * self.transitions[j, i]
-        #g = lambda t, i: np.sum(f(np.transpose([t]), [i], [[self.states]])) * self.emissions[i, sample[t]]
-        #test_alpha = np.zeros((T, self.num_states))
+        #alpha_new = alpha.copy()
+        #c_new = c.copy()
         
         for t in range(1, T):
             for i in self.states:
                 alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states))*self.emissions[i, sample[t]]
+            #f = lambda i, j: alpha_new[t - 1, j] * self.transitions[j, i]
+            #g = lambda i: np.sum(f(i, self.states))*self.emissions[i, sample[t]]
+            #alpha_new[t] = g(self.states)
+            #c_new[t] = 1/np.sum(alpha_new[t])
+            #alpha_new[t] *= c_new[t]
             c[t] = 1 / np.sum(alpha[t])
             alpha[t] = c[t] * alpha[t]
-            
-        #test_alpha = g(np.transpose([np.arange(1, T)]), [self.states])
-        #print(alpha-test_alpha)
         
         return alpha, c
     
@@ -194,15 +188,13 @@ class HMM:
         return newLL
         
         
-    def train(self, train_data, test_data, maxIters):
+    def train(self, train_data, maxIters):
         oldLL = -inf
         
         timer = time.time()
         
         for m in range(maxIters):
-            self.em_step(train_data)
-            newLL = self.LL(test_data)
-            
+            newLL = self.em_step(train_data)
             new_time = time.time()
             print(f'iteration {m} took {new_time - timer} seconds')
             timer = new_time
@@ -296,8 +288,9 @@ def main():
     
     dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
 
-    hmm = HMM(num_states=10)
-    hmm.train(dataset, dataset, 5)
+    for i in range(10):
+        hmm = HMM(num_states=10)
+        hmm.train(dataset, 2)
 
 if __name__ == '__main__':
     main()
