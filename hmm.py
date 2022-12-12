@@ -43,7 +43,6 @@ class HMM:
         self.states = np.arange(num_states)
 
     # return the avg loglikelihood for a complete dataset (train OR test) (list of arrays)
-    # TODO: combine with LL_helper for speed?
     def LL(self, dataset):
         # apply LL_helper to each sample in dataset. Return average.
         return np.average([self.LL_helper(sample) for sample in dataset])
@@ -270,12 +269,10 @@ to_int = np.vectorize(ord)
 
 
 def format_dataset(dataset):
-    print("Parsing data")
     return [to_int(list(sample)) for sample in dataset]
 
 
 def main():
-    '''
     parser = argparse.ArgumentParser(description='Program to build and train a neural network.')
     parser.add_argument('--dev_path', default=None, help='Path to development (i.e., testing) data.')
     parser.add_argument('--train_path', default=None, help='Path to the training data directory.')
@@ -286,21 +283,11 @@ def main():
     args = parser.parse_args()
     hmm = HMM(args.hidden_states)
     print('loading datasets...')
-    train_dataset = format_dataset(load_subdir(args.train_path))
-    test_dataset = format_dataset(load_subdir(args.dev_path))
+    train_dataset = pick_data(format_dataset(load_subdir(args.train_path)), 100)
     print('datasets loaded')
-    hmm.train(train_dataset, test_dataset, args.max_iters)
+    hmm.train(train_dataset, args.max_iters)
     if args.model_out is not None:
         hmm.save_model(args.model_out)
-    '''
-
-    # dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
-
-    dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/pos/')), 100)
-    print("Data loaded and parsed")
-    for i in range(10):
-        hmm = HMM(num_states=10)
-        hmm.train(dataset, 2)
 
 
 if __name__ == '__main__':

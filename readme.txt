@@ -1,7 +1,7 @@
 CSC 246 Project 3: HMM
 Henry Lin and Elana Elman
 
-Our program has three parts.
+Our program has four parts.
     1. hmm.py
         This program builds, trains, and saves a HMM based on training data.
         The command to run it is:
@@ -20,3 +20,14 @@ Our program has three parts.
         calculates the proportion of samples for which the model correctly predicts the next character.
         The command to run it is:
             python3 predict.py --hmm HMM_PATH --test_data TEST_PATH --t TIME_TO_GUESS
+            
+    4. exptXYZ.py
+        This program calls functions from the above programs to execute the experiments described 
+        in our writeup. It saves plots of the experiments.
+        The command to run it is:
+            python3 exptXYZ.py
+        Note that this program assumes that testing data is in aclImdbNorm/test/.
+
+The suggested way to run the program including experiments is to simply run exptXYZ.py.
+To train models, run hmm.py and specify a training dataset.
+To see classification or prediction results, run classify.py or predict.py and specify a saved model file.

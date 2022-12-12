@@ -7,23 +7,15 @@ import matplotlib.pyplot as plt
 
 
 def main():
-    #train(10, 20, 10)
-    #predict_run('pos.pickle', 'aclImdbNorm/test/pos/', 100)
-    #classify_run('pos.pickle', 'neg.pickle','aclImdbNorm/test', 100)
 
     max_iter = 20
     num_samples = 1000
-    indices = [1, 2, 3, 4, 5, 7, 10]
-    train = False
-    do_classify = True
-    do_predict = False
-    path = 'C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/test/'
-    #path = 'aclImdbNorm/test/'
+    indices = [1, 2, 3, 5, 7, 10]
+    path = 'aclImdbNorm/test/'
     
     if train:
         for i in indices:
-            classify.train(i, 20, 100, f'pos_{i}_{max_iter}_{num_samples}', f'neg_{i}_{max_iter}_{num_samples}')
-            #TODO: remove already-trained models
+            classify.train(i, 20, 100, f'models/pos{i}.pickle', f'models/neg{i}.pickle')
     
     if do_classify:
         class_results = []
