@@ -275,6 +275,27 @@ def format_dataset(dataset):
 
 
 def main():
+    '''
+    parser = argparse.ArgumentParser(description='Program to build and train a neural network.')
+    parser.add_argument('--dev_path', default=None, help='Path to development (i.e., testing) data.')
+    parser.add_argument('--train_path', default=None, help='Path to the training data directory.')
+    parser.add_argument('--max_iters', type=int, default=30, help='The maximum number of EM iterations (default 30)')
+    parser.add_argument('--model_out', default=None, help='Filename to save the final model.')
+    parser.add_argument('--hidden_states', type=int, default=10,
+                        help='The number of hidden states to use. (default 10)')
+    args = parser.parse_args()
+    hmm = HMM(args.hidden_states)
+    print('loading datasets...')
+    train_dataset = format_dataset(load_subdir(args.train_path))
+    test_dataset = format_dataset(load_subdir(args.dev_path))
+    print('datasets loaded')
+    hmm.train(train_dataset, test_dataset, args.max_iters)
+    if args.model_out is not None:
+        hmm.save_model(args.model_out)
+    '''
+
+    # dataset = format_dataset(load_sample('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos/' + '12499_7.txt'))
+
     dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/pos/')), 100)
     print("Data loaded and parsed")
     for i in range(10):
