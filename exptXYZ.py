@@ -35,12 +35,12 @@ def main():
     if do_predict:
         pred_results = []
         start_time = 20
-        steps = [1, 2, 3, 4, 5]
         
-        for i in steps:
-            pred_results.append(predict_run("models/pos.pickle", path+'pos', num_samples, start_time, i))
+        #for i in steps:
+        #    pred_results.append(predict_run("models/pos.pickle", path+'pos', num_samples, start_time, i))
+        vals = predict_run("models/pos7.pickle", path+'pos', num_samples, start_time)
         
-        plot("Prediction Accuracy vs Characters Predicted", "Characters Predicted", "Accuracy", steps, pred_results, f"{num_samples} samples")
+        hist("Longest Correct Predictions", "Characters Predicted", vals, f"{num_samples} samples")
     
 
 def plot(title, xlabel, ylabel, x_list, y_list, meta):
@@ -51,6 +51,15 @@ def plot(title, xlabel, ylabel, x_list, y_list, meta):
     plt.xticks(x_list)
     plt.plot(x_list, y_list, label="Accuracy on Testing Data")
     plt.legend()
+    plt.savefig(f"{title} ({meta}).png")
+    
+def hist(title, xlabel, y_list, meta):
+    plt.clf()
+    plt.title(f"{title} ({meta})")
+    plt.xlabel(xlabel)
+    counts, edges, bars = plt.hist(y_list, bins=[0, 1, 2, 3, 4])
+    plt.xticks([0, 1, 2, 3, 4])
+    plt.bar_label(bars)
     plt.savefig(f"{title} ({meta}).png")
 
 
