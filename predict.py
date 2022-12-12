@@ -30,10 +30,10 @@ def predict_run(trained_hmm = None, test_data = None, sample_size = 10, time=10,
         if len(sample) > time + steps:
             prediction = hmm.complete_sequence(sample[:time], steps)
             total += 1
-            if [sample[time+s] == prediction[s] for s in range(steps)].all():
+            if np.array([sample[time+s] == prediction[s] for s in range(steps)]).all():
                 correct += 1
     accuracy = correct/total*100
-    print(f"Probability of correctly guessing character {time} based on the preceeding string is {accuracy}%.")
+    print(f"Probability of correctly guessing {steps} characters after the {time}th based on the preceeding string is {accuracy}%.")
 
 
 def predict_args():

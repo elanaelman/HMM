@@ -91,11 +91,9 @@ class HMM:
             for i in self.states:
                 alpha[t, i] = np.sum(np.vectorize(lambda j: alpha[t - 1, j] * self.transitions[j, i])(self.states)) * \
                               self.emissions[i, sample[t]]
-            # f = lambda i, j: alpha_new[t - 1, j] * self.transitions[j, i]
-            # g = lambda i: np.sum(f(i, self.states))*self.emissions[i, sample[t]]
-            # alpha_new[t] = g(self.states)
-            # c_new[t] = 1/np.sum(alpha_new[t])
-            # alpha_new[t] *= c_new[t]
+            # = lambda i, j: alpha[t - 1, j] * self.transitions[j, i]
+            #g = lambda i: np.sum(f(i, self.states))*self.emissions[i, sample[t]]
+            #alpha[t] = g(self.states)
             c[t] = 1 / np.sum(alpha[t])
             alpha[t] = c[t] * alpha[t]
 
@@ -106,6 +104,9 @@ class HMM:
         beta = np.zeros((T, self.num_states))
         beta[T - 1] = c[T - 1]
         for t in range(T - 2, -1, -1):
+            #f = lambda i, j: self.transitions[i, j] * self.emissions[j, sample[t+1]] * beta[t+1, j]
+            #g = lambda i: np.sum(f(i, self.states))*c[t]
+            #beta[t] = g(self.states)
             for i in self.states:
                 beta[t] = np.sum(
                     [self.transitions[i, j] * self.emissions[j, sample[t + 1]] * beta[t + 1, j] * c[t] for j in
@@ -123,6 +124,8 @@ class HMM:
                 for j in self.states:
                     di_gamma[t, i, j] = alpha[t, i] * self.transitions[i, j] * self.emissions[
                         j, sample[t + 1]] * beta[t + 1, j]
+                #f = lambda j: alpha[t, i] * self.transitions[i, j] * self.emissions[j, sample[t+1]] * beta[t+1, j]
+                #di_gamma[t, i] = f(self.states)
                 gamma[t, i] = np.sum(di_gamma[t, i])
         gamma[T - 1] = alpha[T - 1]
         return gamma, di_gamma
@@ -210,7 +213,7 @@ class HMM:
         additions = []
         for t in range(steps):
             state = np.random.choice(self.num_states, p=self.transitions[prevState])
-            character = np.random.choice(self.vocab_size, p=self.emissions[state])
+            character = np.random.choice(self.vocab_size, p=self.normalize(self.emissions[state]))
             additions.append(character)
             prevState = state
         return additions
