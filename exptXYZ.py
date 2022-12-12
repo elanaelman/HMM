@@ -13,10 +13,10 @@ def main():
 
     max_iter = 20
     num_samples = 1000
-    indices = range(1, 11)
+    indices = [1, 2, 3, 4, 5, 7, 10]
     train = False
-    do_classify = False
-    do_predict = True
+    do_classify = True
+    do_predict = False
     path = 'C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/test/'
     #path = 'aclImdbNorm/test/'
     
