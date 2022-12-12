@@ -42,17 +42,18 @@ def classify_run(pos_hmm=None, neg_hmm=None, path=None, sample_size=10):
 
     # report accuracy  (no need for F1 on balanced data)
     print("%d/%d correct; accuracy %f" % (correct, total, correct / total))
+    return correct/total
 
 
-def train(states=10, max_iters=20, sample_size=10, pos_name='pos.ickle', neg_name='neg.pickle'):
-    pos_dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/pos/')), sample_size)
-    neg_dataset = pick_data(format_dataset(load_subdir('aclImdbNorm/train/neg/')), sample_size)
+def train(states=10, max_iters=20, sample_size=10, pos_name='pos.pickle', neg_name='neg.pickle'):
+    pos_dataset = pick_data(format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/pos')), sample_size)
+    neg_dataset = pick_data(format_dataset(load_subdir('C:/Users/Elana/Documents/GitHub/HMM/aclImdbNorm/aclImdbNorm/train/neg')), sample_size)
     pos_hmm = HMM(num_states=states)
     neg_hmm = HMM(num_states=states)
     pos_hmm.train(pos_dataset, max_iters)
-    neg_hmm.train(neg_dataset, max_iters)
     pos_hmm.save_model(pos_name)
-    neg_hmm.save_model(pos_name)
+    neg_hmm.train(neg_dataset, max_iters)
+    neg_hmm.save_model(neg_name)
 
 
 def classify_args():
